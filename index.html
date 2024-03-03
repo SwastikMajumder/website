@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Priming Experiment</title>
+</head>
+<body>
+    <h1>Semantic Priming Experiment</h1>
+    <button onclick="startExperiment()">Start Experiment</button>
+    <div id="question-container" style="display: none;">
+        <p id="question"></p>
+        <label for="response">Press 'r' for Yes (related) or 'u' for No (unrelated):</label>
+    </div>
+    <script>
+        var pairs = [];
+        var currentPairIndex = 0;
+        var startTime;
+        var responses = [];
+
+        function processFileContent(fileContent) {
+            var lines = fileContent.split('\r\n');
+            console.log(lines);
+            lines.forEach(function(line) {
+                var elements = line.split(/\s+/);
+                if (elements.length === 4) {
+                    pairs.push({ prime: elements[1].trim(), target: elements[3].trim() });
+                }
+            });
+
+            // Shuffle the pairs array
+            shuffleArray(pairs);
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function startExperiment() {
+            document.getElementById("question-container").style.display = "block";
+            currentPairIndex = 0;  // Reset index when starting a new experiment
+            
+            // Fetch the content of data.txt
+            fetch('data.txt')
+                .then(response => response.text())
+                .then(fileContent => {
+                    processFileContent(fileContent);
+                    displayQuestion();
+                    startTime = new Date();
+                })
+                .catch(error => console.error('Error fetching file:', error));
+        }
+
+        function displayQuestion() {
+            var questionElement = document.getElementById("question");
+            questionElement.textContent = `${pairs[currentPairIndex].prime} - ${pairs[currentPairIndex].target}`;
+        }
+
+        function recordResponse(response) {
+            var responseTime = new Date() - startTime;
+
+            responses.push({
+                pair: pairs[currentPairIndex],
+                response: response,
+                time: responseTime
+            });
+
+            if (currentPairIndex < pairs.length - 1) {
+                currentPairIndex++;
+                setTimeout(displayQuestion, 100); // Add a delay for smoother iteration
+                startTime = new Date();
+            } else {
+                // End of experiment, log responses and provide feedback
+                console.log("Experiment Completed! Responses:", responses);
+                alert("Experiment Completed and Response Sumbitted");
+
+                // Send data to server
+                sendDataToServer();
+            }
+        }
+
+        document.addEventListener('keydown', function(event) {
+            var key = event.key.toLowerCase();
+
+            if (key === "r" || key === "u") {
+                recordResponse(key);
+            }
+        });
+
+        function sendDataToServer() {
+            // Assuming you have a variable named 'responses' containing the experiment data
+            fetch('/storeData', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(responses),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Data sent to server:', data);
+
+                // Call the endpoint to save the data to a file after sending it to the server
+                fetch('/saveToFile', {
+                    method: 'POST',
+                })
+                .then(saveResponse => saveResponse.json())
+                .then(saveData => {
+                    console.log('Data saved to file:', saveData);
+                })
+                .catch(saveError => {
+                    console.error('Error saving data to file:', saveError);
+                });
+            })
+            .catch(error => {
+                console.error('Error sending data to server:', error);
+            });
+        }
+    </script>
+</body>
+</html>
